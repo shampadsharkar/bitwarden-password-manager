@@ -1,0 +1,45 @@
+# Add this to your HTTP redirect section in /etc/nginx/sites-enabled/shampadsr.com
+# Update the server_name list to include:
+        bitwarden.shampadsr.com
+
+# Add this new server block to your Nginx config:
+
+# Bitwarden
+server {
+    listen 443 ssl;
+    server_name bitwarden.shampadsr.com;
+
+    ssl_certificate /etc/letsencrypt/live/shampadsr.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/shampadsr.com/privkey.pem;
+
+    # Allow large attachments
+    client_max_body_size 525M;
+
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # WebSocket support for Bitwarden notifications
+    location /notifications/hub {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Admin panel
+    location /admin {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

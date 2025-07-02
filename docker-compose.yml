@@ -1,0 +1,13 @@
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    environment:
+      - WEBSOCKET_ENABLED=${WEBSOCKET_ENABLED}
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - DOMAIN=${DOMAIN}
+    ports:
+      - "8080:80"
+    volumes:
+      - /mnt/ssd/nas/bitwarden-data/vaultwarden:/data
