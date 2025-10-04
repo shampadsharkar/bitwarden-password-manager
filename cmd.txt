@@ -1,0 +1,6 @@
+python3 scripts/upload_to_gdrive.py \
+  --auth oauth \
+  --credentials env/client_secret.json \
+  --token env/gdrive-token.json \
+  --folder-id 1k8tid2Ryiayaj-CbN3Fm6MdWksTYKvQq \
+  backups/vaultwarden-data_20251004_175459.tar.gz

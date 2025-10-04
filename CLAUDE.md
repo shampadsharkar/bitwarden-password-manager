@@ -27,12 +27,12 @@ The system uses Docker for containerization with Nginx as the reverse proxy:
 
 ## Environment Configuration
 
-The project uses a `.env` file to store sensitive configuration:
+The project now keeps environment variables in `env/vaultwarden.env`:
 - `ADMIN_TOKEN`: Admin interface access token
 - `DOMAIN`: Your Bitwarden domain URL (e.g., https://bitwarden.shampadsr.com)
 - `WEBSOCKET_ENABLED`: Enable WebSocket support (true/false)
 
-**Important**: Never commit the `.env` file to version control as it contains sensitive information.
+**Important**: Never commit the `env/` directory to version control as it contains sensitive information.
 
 ## Common Commands
 
