@@ -200,19 +200,7 @@ if is_truthy "${ARCHIVE_ENABLED}"; then
 fi
 
 # ============================================================================
-# Step 4: Clean Up Old Local Backups
-# ============================================================================
-
-# Delete local backup files older than RETENTION_DAYS
-if [[ -n "${RETENTION_DAYS}" ]]; then
-  log "Pruning local backups older than ${RETENTION_DAYS} day(s)"
-  # Find and delete files in backup directory older than RETENTION_DAYS
-  # -mtime +N means files modified more than N days ago
-  find "${LOCAL_BACKUP_DIR}" -maxdepth 1 -type f -mtime +"${RETENTION_DAYS}" -print -delete || true
-fi
-
-# ============================================================================
-# Step 5: Upload to Remote Storage (GCS)
+# Step 4: Upload to Remote Storage (GCS)
 # ============================================================================
 
 # If a remote sync command is configured and we have a backup file to upload
@@ -229,11 +217,25 @@ if [[ -n "${REMOTE_SYNC_CMD}" && -n "${last_backup}" ]]; then
   # DATA_DIR: Path to the Vaultwarden data directory
   if ! env LAST_BACKUP="${last_backup}" DATA_DIR="${DATA_DIR}" bash "${cmd_script}"; then
     rm -f "${cmd_script}"
-    fail "Remote sync command failed"
+    fail "Remote sync command failed — skipping local cleanup to preserve backups"
   fi
 
   # Clean up the temporary script
   rm -f "${cmd_script}"
+fi
+
+# ============================================================================
+# Step 5: Clean Up Old Local Backups
+# Only runs after a successful upload (or if no remote sync is configured).
+# This ensures local backups are never pruned when a backup/upload has failed.
+# ============================================================================
+
+# Delete local backup files older than RETENTION_DAYS
+if [[ -n "${RETENTION_DAYS}" ]]; then
+  log "Pruning local backups older than ${RETENTION_DAYS} day(s)"
+  # Find and delete files in backup directory older than RETENTION_DAYS
+  # -mtime +N means files modified more than N days ago
+  find "${LOCAL_BACKUP_DIR}" -maxdepth 1 -type f -mtime +"${RETENTION_DAYS}" -print -delete || true
 fi
 
 # ============================================================================

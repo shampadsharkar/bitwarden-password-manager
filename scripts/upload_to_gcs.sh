@@ -21,8 +21,10 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUCKET_NAME="${GCS_BUCKET_NAME:-home-server-ss}"
 # Path/folder within the bucket where backups will be stored
 BUCKET_PATH="${GCS_BUCKET_PATH:-bitwarden-backups}"
-# Number of days to keep backups in GCS (older ones will be deleted)
+# Number of days to keep daily backups in GCS
 RETENTION_DAYS="${GCS_RETENTION_DAYS:-30}"
+# Number of months to keep monthly archive backups (one per month, earliest of each month)
+MONTHLY_RETENTION_MONTHS="${GCS_MONTHLY_RETENTION_MONTHS:-12}"
 # Path to GCS service account key JSON file for authentication
 SERVICE_ACCOUNT_KEY="${GCS_SERVICE_ACCOUNT_KEY:-${PROJECT_ROOT}/env/service_account.json}"
 
@@ -80,43 +82,86 @@ if gcloud storage cp "${FILE_PATH}" "${DESTINATION}"; then
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Upload successful"
 
   # ============================================================================
-  # Clean Up Old Backups in GCS
+  # Clean Up Old Backups in GCS (Two-Tier Retention)
+  # Tier 1 – Daily  : keep all backups from the last RETENTION_DAYS days
+  # Tier 2 – Monthly: for older backups, keep the earliest backup of each
+  #                   calendar month for up to MONTHLY_RETENTION_MONTHS months
   # ============================================================================
 
-  # Only clean up if retention policy is configured
   if [[ -n "${RETENTION_DAYS}" && "${RETENTION_DAYS}" -gt 0 ]]; then
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Checking backups for cleanup (retention: ${RETENTION_DAYS} days)"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Checking backups for cleanup (daily: ${RETENTION_DAYS}d, monthly: ${MONTHLY_RETENTION_MONTHS}mo)"
 
-    # Count total backups in GCS to ensure we don't delete all backups
-    TOTAL_BACKUPS=$(gcloud storage ls "gs://${BUCKET_NAME}/${BUCKET_PATH}/" 2>/dev/null | grep -c "gs://" || echo "0")
+    # List all backup URLs in GCS
+    BACKUP_LIST=$(gcloud storage ls "gs://${BUCKET_NAME}/${BUCKET_PATH}/" 2>/dev/null || echo "")
+    TOTAL_BACKUPS=$(echo "${BACKUP_LIST}" | grep -c "gs://" || echo "0")
 
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Total backups in GCS: ${TOTAL_BACKUPS}"
 
-    # Only proceed with cleanup if we have more backups than retention period
-    # This ensures we always keep at least RETENTION_DAYS backups even if the system fails
-    if [[ "${TOTAL_BACKUPS}" -gt "${RETENTION_DAYS}" ]]; then
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Cleaning up backups older than ${RETENTION_DAYS} days"
+    if [[ "${TOTAL_BACKUPS}" -gt 0 ]]; then
+      DAILY_CUTOFF=$(date -d "${RETENTION_DAYS} days ago" '+%Y%m%d')
+      MONTHLY_CUTOFF=$(date -d "${MONTHLY_RETENTION_MONTHS} months ago" '+%Y%m%d')
 
-      # Calculate the cutoff timestamp (files older than this will be deleted)
-      # Convert to Unix timestamp (seconds since epoch)
-      CUTOFF_TIMESTAMP=$(date -d "${RETENTION_DAYS} days ago" '+%s')
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Daily window back to: ${DAILY_CUTOFF}, Monthly archive back to: ${MONTHLY_CUTOFF}"
 
-      # List all files in the GCS bucket path with detailed information
-      # Format: SIZE  CREATION_DATE  CREATION_TIME  gs://path/to/file
-      gcloud storage ls --long "gs://${BUCKET_NAME}/${BUCKET_PATH}/" | tail -n +2 | \
-      while read -r size created time name; do
-        # Convert the file's creation date to Unix timestamp
-        file_timestamp=$(date -d "${created} ${time}" '+%s' 2>/dev/null || echo "0")
+      # ---- Pass 1: find the earliest backup URL for each YYYYMM ----
+      declare -A _monthly_rep
+      declare -A _monthly_rep_date
 
-        # If file is older than retention period, delete it
-        if [[ "${file_timestamp}" -gt 0 && "${file_timestamp}" -lt "${CUTOFF_TIMESTAMP}" ]]; then
-          echo "[$(date '+%Y-%m-%d %H:%M:%S')] Deleting old backup: ${name}"
-          # Delete the file from GCS (|| true prevents script from failing if delete fails)
-          gcloud storage rm "${name}" || true
+      while read -r gcs_url; do
+        [[ "${gcs_url}" == gs://* ]] || continue
+        filename="$(basename "${gcs_url}")"
+        [[ "${filename}" =~ ([0-9]{8})_[0-9]{6} ]] || continue
+        file_date="${BASH_REMATCH[1]}"
+        ym="${file_date:0:6}"
+
+        if [[ "${file_date}" < "${DAILY_CUTOFF}" ]]; then
+          if [[ -z "${_monthly_rep[$ym]:-}" || "${file_date}" < "${_monthly_rep_date[$ym]}" ]]; then
+            _monthly_rep[$ym]="${gcs_url}"
+            _monthly_rep_date[$ym]="${file_date}"
+          fi
         fi
-      done
+      done <<< "${BACKUP_LIST}"
+
+      # ---- Pass 2: delete files that don't qualify for either tier ----
+      while read -r gcs_url; do
+        [[ "${gcs_url}" == gs://* ]] || continue
+        filename="$(basename "${gcs_url}")"
+
+        if [[ "${filename}" =~ ([0-9]{8})_[0-9]{6} ]]; then
+          file_date="${BASH_REMATCH[1]}"
+        else
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] Skipping ${filename}: cannot extract date from filename"
+          continue
+        fi
+
+        ym="${file_date:0:6}"
+
+        # Tier 1: within daily window — keep unconditionally
+        if [[ ! "${file_date}" < "${DAILY_CUTOFF}" ]]; then
+          continue
+        fi
+
+        # Beyond monthly archive horizon — delete regardless
+        if [[ "${file_date}" < "${MONTHLY_CUTOFF}" ]]; then
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] Deleting (beyond monthly horizon): ${gcs_url}"
+          gcloud storage rm "${gcs_url}" || true
+          continue
+        fi
+
+        # Tier 2: monthly representative — keep it
+        if [[ "${_monthly_rep[$ym]:-}" == "${gcs_url}" ]]; then
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] Keeping monthly archive (${ym}): ${filename}"
+          continue
+        fi
+
+        # Not in daily window and not the monthly rep — delete
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Deleting (superseded within month ${ym}): ${gcs_url}"
+        gcloud storage rm "${gcs_url}" || true
+      done <<< "${BACKUP_LIST}"
+
+      unset _monthly_rep _monthly_rep_date
     else
-      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Skipping cleanup: Only ${TOTAL_BACKUPS} backups exist (need more than ${RETENTION_DAYS} to clean up)"
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] No backups found in GCS, skipping cleanup"
     fi
   fi
 else
