@@ -8,4 +8,4 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - /mnt/ssd/nas/bitwarden-data/vaultwarden:/data
+      - /home/shampad/bitwarden-data/vaultwarden:/data
