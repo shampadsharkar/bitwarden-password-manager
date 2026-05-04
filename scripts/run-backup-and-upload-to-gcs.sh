@@ -2,7 +2,6 @@
 # Complete backup script: backup Vaultwarden data and upload to GCS
 # This is the main entry point called by cron
 
-set -euo pipefail
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(dirname "$0")"
