@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Complete backup script: backup Vaultwarden data and upload to GCS
 # This is the main entry point called by cron
 
