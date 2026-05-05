@@ -16,6 +16,8 @@ if [ -f "${PROJECT_ROOT}/env/vaultwarden.env" ]; then
   set +a
 fi
 
+export VAULTWARDEN_REMOTE_SYNC_CMD="${SCRIPT_DIR}/upload_to_gcs.sh \"\$LAST_BACKUP\""
+
 # Run the main backup script which will:
 # 1. Create database backup in Vaultwarden container
 # 2. Create compressed archive of all data
