@@ -8,6 +8,16 @@
 # Enable strict error handling
 set -euo pipefail
 
+# Add gcloud to PATH if not already present
+if ! command -v gcloud >/dev/null 2>&1; then
+  for _gc_dir in "$HOME/google-cloud-sdk/bin" /opt/google-cloud-sdk/bin /usr/local/google-cloud-sdk/bin; do
+    if [[ -x "${_gc_dir}/gcloud" ]]; then
+      export PATH="${_gc_dir}:${PATH}"
+      break
+    fi
+  done
+fi
+
 # ============================================================================
 # Configuration
 # ============================================================================
