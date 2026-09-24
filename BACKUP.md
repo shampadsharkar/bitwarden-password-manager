@@ -4,16 +4,18 @@ This repository now includes a host-side helper script that triggers the built-i
 
 ## Files
 
-- `scripts/vaultwarden-backup.sh` – main automation script (run on the Docker host)
-- `scripts/upload_to_gdrive.py` – helper to push artefacts to Google Drive using a service account or user OAuth
+- `scripts/run-backup-upload-to-gcs.sh` – main entry point called by cron; executes backup, GCS upload, and Telegram notification
+- `scripts/vaultwarden-backup.sh` – automation script creating DB backup and archiving data directory
+- `scripts/upload_to_gcs.sh` – uploads backup tarball to Google Cloud Storage with retention policies
+- `scripts/notify-backup.py` – sends backup execution status (success/failure) to Telegram via Bot API
+- `scripts/restore_from_gcs.sh` – utility to restore Vaultwarden data from GCS backups
 
 ## Prerequisites
 
-- Docker Compose access to the Vaultwarden container (`vaultwarden` service name must match `docker-compose.yml`)
-- Vaultwarden `server` image version 1.32.1 or newer (provides the `/vaultwarden backup` command)
-- The Vaultwarden data volume mounted on the host at `/mnt/ssd/nas/bitwarden-data/vaultwarden`
-- Optional packages depending on the features you enable (e.g. `gpg`, `rclone`, `rsync`)
-- Python 3 with `google-api-python-client`, `google-auth`, `google-auth-httplib2`, and `google-auth-oauthlib` if you use the Google Drive uploader
+- Docker Compose access to the Vaultwarden container (`vaultwarden` service name in `docker-compose.yml`)
+- Google Cloud SDK (`gcloud`) with a valid service account key
+- Python 3 standard library (no pip dependencies required for Telegram notifications)
+- The Vaultwarden data volume mounted on the host at `/home/shampad/bitwarden-data/vaultwarden`
 
 ## Configuration
 

@@ -3303,3 +3303,32 @@ Copying file:///home/shampad/Desktop/projects/bitwarden-password-manager/backups
 [2026-03-23 00:00:09] Total backups in GCS: 38
 [2026-03-23 00:00:09] Cleaning up backups older than 7 days
 [2026-03-23 00:00:11] Backup routine completed successfully
+[2026-09-24 18:13:45] Triggering Vaultwarden in-container backup
+[INFO] Using saved config from `data/config.json` for configuration.
+
+[WARNING] The following environment variables are being overridden by the config.json file.
+[WARNING] Please use the admin panel to make changes to them:
+[WARNING] DOMAIN, SIGNUPS_ALLOWED, IP_HEADER
+
+[NOTICE] You are using a plain text `ADMIN_TOKEN` which is insecure.
+Please generate a secure Argon2 PHC string by using `vaultwarden hash` or `argon2`.
+See: https://github.com/dani-garcia/vaultwarden/wiki/Enabling-admin-page#secure-the-admin_token
+
+Backup to 'data/db_20260924_121345.sqlite3' was successful
+[2026-09-24 18:13:45] Detected 1 new backup artefact(s)
+[2026-09-24 18:13:45] Copying db_20260924_121345.sqlite3 to local backup dir
+[2026-09-24 18:13:45] Removing snapshot db_20260924_121345.sqlite3 from live data dir
+[2026-09-24 18:13:45] Archiving /home/shampad/bitwarden-data/vaultwarden -> vaultwarden-data_20260924_181345.tar.gz
+[2026-09-24 18:13:45] Running remote sync command
+[2026-09-24 18:13:45] Authenticating with service account: /home/shampad/Desktop/projects/bitwarden-password-manager/env/service_account.json
+Activated service account credentials for: [gcs-782@home-server-475704.iam.gserviceaccount.com]
+[2026-09-24 18:13:46] Uploading /home/shampad/Desktop/projects/bitwarden-password-manager/backups/vaultwarden-data_20260924_181345.tar.gz to gs://home-server-ss/bitwarden-backups/vaultwarden-data_20260924_181345.tar.gz
+Copying file:///home/shampad/Desktop/projects/bitwarden-password-manager/backups/vaultwarden-data_20260924_181345.tar.gz to gs://home-server-ss/bitwarden-backups/vaultwarden-data_20260924_181345.tar.gz
+  
+........
+[2026-09-24 18:13:51] Upload successful
+[2026-09-24 18:13:51] Checking backups for cleanup (daily: 30d, monthly: 12mo)
+[2026-09-24 18:13:53] Total backups in GCS: 8
+[2026-09-24 18:13:53] Daily window back to: 20260825, Monthly archive back to: 20250924
+[2026-09-24 18:13:53] Pruning local backups older than 7 day(s)
+[2026-09-24 18:13:53] Backup routine completed successfully

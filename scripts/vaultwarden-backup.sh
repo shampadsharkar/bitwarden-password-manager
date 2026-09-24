@@ -20,7 +20,7 @@ COMPOSE_BIN="${DOCKER_COMPOSE_BIN:-docker compose}"
 COMPOSE_FILE="${PROJECT_ROOT}/docker-compose.yml"
 
 # Data directory where Vaultwarden stores its data (mapped from Docker volume)
-DATA_DIR="${VAULTWARDEN_DATA_DIR:-/mnt/ssd/nas/bitwarden-data/vaultwarden}"
+DATA_DIR="${VAULTWARDEN_DATA_DIR:-/home/shampad/bitwarden-data/vaultwarden}"
 # Local directory to store backup files
 LOCAL_BACKUP_DIR="${VAULTWARDEN_BACKUP_DIR:-${PROJECT_ROOT}/backups}"
 # Pattern to match database backup files created by Vaultwarden
@@ -30,7 +30,7 @@ ARCHIVE_ENABLED="${VAULTWARDEN_ARCHIVE_ENABLED:-true}"
 # Prefix for archive filenames
 ARCHIVE_PREFIX="${VAULTWARDEN_ARCHIVE_PREFIX:-vaultwarden-data}"
 # Paths to exclude from the archive (relative to DATA_DIR)
-ARCHIVE_EXCLUDES="${VAULTWARDEN_ARCHIVE_EXCLUDES:-backups}"
+ARCHIVE_EXCLUDES="${VAULTWARDEN_ARCHIVE_EXCLUDES:-backups:tmp:icon_cache}"
 # Number of days to keep local backups
 RETENTION_DAYS="${VAULTWARDEN_RETENTION_DAYS:-7}"
 # Command to run for remote sync (e.g., upload to GCS)
@@ -73,6 +73,11 @@ fi
 # Check if docker-compose.yml exists
 if [[ ! -f "${COMPOSE_FILE}" ]]; then
   fail "Could not locate docker-compose.yml at ${COMPOSE_FILE}"
+fi
+
+# Check if Vaultwarden container is running
+if ! ${COMPOSE_BIN} -f "${COMPOSE_FILE}" ps --status running --format '{{.Names}}' | grep -q "vaultwarden"; then
+  fail "Vaultwarden container is not running (start it with: ${COMPOSE_BIN} -f ${COMPOSE_FILE} up -d)"
 fi
 
 # Check if Vaultwarden data directory exists
@@ -149,6 +154,10 @@ for src in "${produced_files[@]}"; do
 
   # Remember this file for potential remote upload
   last_backup="${dest}"
+
+  # Clean up the snapshot from live DATA_DIR so it doesn't accumulate and bloat backups
+  log "Removing snapshot ${base} from live data dir"
+  rm -f "${src}"
 done
 
 # ============================================================================
@@ -165,8 +174,8 @@ if is_truthy "${ARCHIVE_ENABLED}"; then
   tmp_archive="${archive_path}.in-progress"
 
   # Get parent directory and basename for tar command
-  # e.g., if DATA_DIR is /mnt/ssd/nas/bitwarden-data/vaultwarden
-  # parent_dir will be /mnt/ssd/nas/bitwarden-data
+  # e.g., if DATA_DIR is /home/shampad/bitwarden-data/vaultwarden
+  # parent_dir will be /home/shampad/bitwarden-data
   # data_basename will be vaultwarden
   parent_dir="$(dirname "${DATA_DIR}")"
   data_basename="$(basename "${DATA_DIR}")"
@@ -174,7 +183,7 @@ if is_truthy "${ARCHIVE_ENABLED}"; then
   # Build tar command with compression
   tar_cmd=(tar --create --gzip --file "${tmp_archive}" --directory "${parent_dir}")
 
-  # Add exclusions (e.g., exclude backups subdirectory to avoid recursion)
+  # Add exclusions (e.g., exclude backups subdirectory, snapshots, and caches)
   IFS=':' read -r -a archive_excludes <<< "${ARCHIVE_EXCLUDES}"
   for rel_path in "${archive_excludes[@]}"; do
     rel_path_trimmed="${rel_path//[[:space:]]/}"
@@ -182,6 +191,9 @@ if is_truthy "${ARCHIVE_ENABLED}"; then
       tar_cmd+=(--exclude="${data_basename}/${rel_path_trimmed}")
     fi
   done
+
+  # Always exclude internal snapshots and transient files from the full data archive
+  tar_cmd+=(--exclude="${data_basename}/db_*.sqlite3*" --exclude="${data_basename}/*.in-progress")
 
   # Add the directory to archive
   tar_cmd+=("${data_basename}")

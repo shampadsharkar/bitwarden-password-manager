@@ -63,19 +63,20 @@ if ! command -v gcloud >/dev/null 2>&1; then
   exit 1
 fi
 
-# Verify service account key file exists
-if [[ ! -f "${SERVICE_ACCOUNT_KEY}" ]]; then
-  echo "Error: Service account key not found: ${SERVICE_ACCOUNT_KEY}" >&2
-  exit 1
-fi
-
 # ============================================================================
 # Authenticate with Google Cloud
 # ============================================================================
 
-# Authenticate using the service account JSON key
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Authenticating with service account"
-gcloud auth activate-service-account --key-file="${SERVICE_ACCOUNT_KEY}" --quiet
+if [[ -f "${SERVICE_ACCOUNT_KEY}" ]]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Authenticating with service account: ${SERVICE_ACCOUNT_KEY}"
+  gcloud auth activate-service-account --key-file="${SERVICE_ACCOUNT_KEY}" --quiet
+elif gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null | grep -q "@"; then
+  ACTIVE_ACCT=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null | head -n1)
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Using existing active gcloud account: ${ACTIVE_ACCT}"
+else
+  echo "Error: Service account key not found at ${SERVICE_ACCOUNT_KEY} and no active gcloud account" >&2
+  exit 1
+fi
 
 # ============================================================================
 # Upload Backup File to GCS
